@@ -34,6 +34,7 @@ Sub GatherAssociatedRows()
     Dim cutCost As Double
     Dim cutType As String
     Dim feeCalculation As String
+    Dim totalCutCost As Double
     
     ' Set worksheets
     Set wsSheet3 = ThisWorkbook.Sheets("Sheet3")
@@ -55,6 +56,7 @@ Sub GatherAssociatedRows()
     foundStart = False
     foundEnd = False
     outputRow = 2 ' Starting output row for results
+    totalCutCost = 0 ' Initialize total cut cost
     
     ' Get input values from Sheet3
     streetName = CStr(wsSheet3.Cells(3, 3).Value) ' C3
@@ -125,6 +127,7 @@ Sub GatherAssociatedRows()
     For row = startRow To endRow
         sectionLength = wsPCI.Cells(row, 10).Value
         sectionWidth = wsPCI.Cells(row, 11).Value
+        sectionArea = wsPCI.Cells(row, 12).Value
         
         ' Calculate the length within the section
         If row = startRow Then
@@ -154,7 +157,6 @@ Sub GatherAssociatedRows()
         ' Calculate the unit cost based on the fee table
         functionalClass = wsPCI.Cells(row, 8).Value ' Use Rank column (H)
         pci = wsPCI.Cells(row, 14).Value
-        sectionArea = sectionLength * sectionWidth
         cutArea = sectionLength * cutWidth
         
         ' Determine fees based on functional class and PCI
@@ -218,6 +220,9 @@ Sub GatherAssociatedRows()
         remainingCutLength = remainingCutLength - sectionLength
         currentCutStart = sectionEnd
         
+        ' Add to total cut cost
+        totalCutCost = totalCutCost + cutCost
+        
         ' If the remaining cut length is less than or equal to zero, exit the loop
         If remainingCutLength <= 0 Then
             Exit For
@@ -226,5 +231,14 @@ Sub GatherAssociatedRows()
         outputRow = outputRow + 1
     Next row
     
+    ' Output total cut cost to the output sheet
+    wsSheet3Output.Cells(2, 5).Value = "Total Cut Cost"
+    wsSheet3Output.Cells(2, 6).Value = totalCutCost
+    
+    ' Output total cut cost to cell C11 of Sheet3
+    wsSheet3.Cells(11, 3).Value = totalCutCost
+    
     MsgBox "Data extraction complete from row " & startRow & " to row " & endRow, vbInformation, "Success"
 End Sub
+
+
