@@ -125,13 +125,21 @@ Sub GatherAssociatedRows()
     For row = startRow To endRow
         sectionLength = wsPCI.Cells(row, 10).Value
         sectionWidth = wsPCI.Cells(row, 11).Value
-        sectionStart = currentCutStart
-        sectionEnd = sectionStart + sectionLength
         
-        ' Check if the section falls within the remaining cut length
-        If sectionEnd > totalCutStart + cutLength Then
-            sectionEnd = totalCutStart + cutLength
+        ' Calculate the length within the section
+        If row = startRow Then
+            ' For the first section, calculate based on distance from start
+            sectionStart = distanceFromPrevSection
+            sectionEnd = sectionLength
             sectionLength = sectionEnd - sectionStart
+        Else
+            sectionStart = 0
+            sectionEnd = sectionLength
+        End If
+        
+        If remainingCutLength <= sectionLength Then
+            sectionEnd = sectionStart + remainingCutLength
+            sectionLength = remainingCutLength
         End If
         
         ' Output section dimensions
@@ -195,8 +203,7 @@ Sub GatherAssociatedRows()
             feeCalculation = cutArea & " * " & largeCutFee
         End If
         
-        wsSheet3Output.Cells(outputRow, 12).Value = functionalClassFull
-       
+        ' Output additional section information
         wsSheet3Output.Cells(outputRow, 12).Value = functionalClassFull
         wsSheet3Output.Cells(outputRow, 13).Value = smallCutFee
         wsSheet3Output.Cells(outputRow, 14).Value = largeCutFee
@@ -221,7 +228,3 @@ Sub GatherAssociatedRows()
     
     MsgBox "Data extraction complete from row " & startRow & " to row " & endRow, vbInformation, "Success"
 End Sub
-
-
-
-
