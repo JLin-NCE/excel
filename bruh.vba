@@ -15,17 +15,17 @@ Public Sub GatherAssociatedRows()
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
     
-    Dim wsSheet3 As Worksheet
-    Dim wsSheet3Output As Worksheet
+    Dim wsInput As Worksheet
+    Dim wsOutput As Worksheet
     Dim wsPCI As Worksheet
     Dim inputData As InputDataType
     Dim startRow As Long, endRow As Long
     
-    Set wsSheet3 = ThisWorkbook.Sheets("Sheet3")
+    Set wsInput = ThisWorkbook.Sheets("Cut Impact Fee Calculator")
     Set wsPCI = ThisWorkbook.Sheets("Covina PCI Report")
-    Set wsSheet3Output = CreateOrClearOutputSheet
+    Set wsOutput = CreateOrClearOutputSheet
     
-    inputData = GetInputData(wsSheet3)
+    inputData = GetInputData(wsInput)
     
     If Not FindStartAndEndRows(wsPCI, inputData, startRow, endRow) Then
         Application.ScreenUpdating = True
@@ -33,7 +33,7 @@ Public Sub GatherAssociatedRows()
         Exit Sub
     End If
     
-    ProcessAndOutputData wsSheet3Output, wsPCI, inputData, startRow, endRow
+    ProcessAndOutputData wsOutput, wsPCI, wsInput, inputData, startRow, endRow
     
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
@@ -45,12 +45,12 @@ Private Function CreateOrClearOutputSheet() As Worksheet
     Dim ws As Worksheet
     
     On Error Resume Next
-    Set ws = ThisWorkbook.Sheets("Sheet3 Output")
+    Set ws = ThisWorkbook.Sheets("Fee Calculator Output")
     On Error GoTo 0
     
     If ws Is Nothing Then
-        Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets("Sheet3"))
-        ws.Name = "Sheet3 Output"
+        Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets("Cut Impact Fee Calculator"))
+        ws.Name = "Fee Calculator Output"
     Else
         ws.Cells.Clear
     End If
@@ -129,7 +129,96 @@ Private Function FindStartAndEndRows(ws As Worksheet, inputData As InputDataType
     FindStartAndEndRows = False
 End Function
 
-Private Sub ProcessAndOutputData(wsOutput As Worksheet, wsPCI As Worksheet, inputData As InputDataType, startRow As Long, endRow As Long)
+Private Sub FormatOutputSheet(ws As Worksheet, lastRow As Long)
+    If lastRow < 2 Then Exit Sub  ' Exit if there's no data
+    
+    With ws
+        ' Clear any existing formatting
+        .Cells.ClearFormats
+        
+        ' Determine the last column
+        Dim lastCol As Long
+        lastCol = .Cells(2, .Columns.Count).End(xlToLeft).Column
+        
+        ' Add a title to the sheet
+        .Cells(1, 1).EntireRow.Insert
+        With .Cells(1, 1)
+            .Value = "Road Cut Fee Calculation Results"
+            .Font.Size = 14
+            .Font.Bold = True
+            .HorizontalAlignment = xlCenter
+        End With
+        If lastCol > 1 Then
+            .Range(.Cells(1, 1), .Cells(1, lastCol)).Merge
+        End If
+        
+        ' Format headers
+        With .Range(.Cells(2, 1), .Cells(2, lastCol))
+            .Font.Bold = True
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter
+            .Interior.Color = RGB(155, 194, 230)  ' Light blue
+            .Borders(xlEdgeBottom).LineStyle = xlContinuous
+            .Borders(xlEdgeBottom).Weight = xlMedium
+        End With
+        
+        ' Format all data rows excluding the "Total Cut Cost" row
+        With .Range(.Cells(3, 1), .Cells(lastRow - 1, lastCol))
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter
+            .Borders.LineStyle = xlContinuous
+            .Borders.Weight = xlThin
+            .Font.Bold = False  ' Ensure no bold font for data rows
+        End With
+        
+        ' Add alternating row colors and ensure consistent shading
+        Dim i As Long
+        For i = 3 To lastRow - 1
+            If i Mod 2 = 0 Then
+                .Range(.Cells(i, 1), .Cells(i, lastCol)).Interior.Color = RGB(217, 225, 242)  ' Very light blue
+            Else
+                .Range(.Cells(i, 1), .Cells(i, lastCol)).Interior.Color = RGB(255, 255, 255)  ' White for odd rows
+            End If
+        Next i
+        
+        ' Apply consistent formatting to all relevant columns
+        .Range(.Cells(3, 4), .Cells(lastRow - 1, 8)).NumberFormat = "#,##0.00"  ' Section Start, Section End, Length, Width, Area
+        .Range(.Cells(3, 9), .Cells(lastRow - 1, 9)).NumberFormat = "0.0"  ' PCI
+        .Range(.Cells(3, 12), .Cells(lastRow - 1, 12)).NumberFormat = "#,##0.00"  ' Cut Area
+        .Range(.Cells(3, 13), .Cells(lastRow - 1, 14)).NumberFormat = "$#,##0.00"  ' Small Cut Fee, Large Cut Fee
+        .Range(.Cells(3, 15), .Cells(lastRow - 1, 15)).NumberFormat = "$0 * #,##0.00"  ' Fee Calculation (with $ sign)
+        .Range(.Cells(3, 16), .Cells(lastRow - 1, 18)).NumberFormat = "$#,##0.00"  ' Cut Cost and new adjusted columns
+        
+        ' Bold and highlight the "Total Cut Cost" row
+        With .Range(.Cells(lastRow, 1), .Cells(lastRow, lastCol))
+            .Font.Bold = True
+            .HorizontalAlignment = xlCenter  ' Ensure consistent alignment in the total row
+            .VerticalAlignment = xlCenter
+            .Interior.Color = RGB(189, 215, 238)  ' Medium blue background for clarity
+            .Borders.LineStyle = xlContinuous
+            .Borders.Weight = xlThin
+        End With
+        
+        ' Ensure row shading is consistent even for the last row
+        If lastRow Mod 2 = 0 Then
+            .Range(.Cells(lastRow, 1), .Cells(lastRow, lastCol)).Interior.Color = RGB(217, 225, 242)  ' Light blue for last row
+        Else
+            .Range(.Cells(lastRow, 1), .Cells(lastRow, lastCol)).Interior.Color = RGB(255, 255, 255)  ' White for last row
+        End If
+        
+        ' Add a blank row after the last data row
+        .Cells(lastRow + 1, 1).EntireRow.Insert
+        
+        ' Adjust column widths consistently for all columns
+        .UsedRange.Columns.AutoFit
+    End With
+End Sub
+
+
+
+
+
+Private Sub ProcessAndOutputData(wsOutput As Worksheet, wsPCI As Worksheet, wsInput As Worksheet, inputData As InputDataType, startRow As Long, endRow As Long)
     Dim dataArray As Variant
     Dim outputArray() As Variant
     Dim i As Long, outputRow As Long
@@ -139,9 +228,17 @@ Private Sub ProcessAndOutputData(wsOutput As Worksheet, wsPCI As Worksheet, inpu
     Dim functionalClass As String, functionalClassFull As String, pci As Double
     Dim smallCutFee As Double, largeCutFee As Double
     Dim cutArea As Double, cutCost As Double, cutType As String, feeCalculation As String
+    Dim inflationFactor As Double
+    
+    ' Calculate the inflation factor based on the anticipated cut year and inflation rate
+    If inputData.anticipatedCutYear > 2024 Then
+        inflationFactor = (1 + inputData.inflationRate / 100) ^ (inputData.anticipatedCutYear - 2024)
+    Else
+        inflationFactor = 1 ' No inflation adjustment if the year is 2024 or earlier
+    End If
     
     dataArray = wsPCI.Range("C" & startRow & ":N" & endRow).Value
-    ReDim outputArray(1 To endRow - startRow + 1, 1 To 16)
+    ReDim outputArray(1 To endRow - startRow + 1, 1 To 18)  ' Increased to 18 to include Adjusted Small and Large Cut Fee
     
     outputRow = 1
     remainingCutLength = inputData.cutLength
@@ -172,6 +269,11 @@ Private Sub ProcessAndOutputData(wsOutput As Worksheet, wsPCI As Worksheet, inpu
         cutArea = Round(sectionLength * inputData.cutWidth, 2)
         
         DetermineFees functionalClass, pci, functionalClassFull, smallCutFee, largeCutFee
+        
+        ' Adjust the cut fees using the inflation factor
+        smallCutFee = Round(smallCutFee * inflationFactor, 2)
+        largeCutFee = Round(largeCutFee * inflationFactor, 2)
+        
         DetermineCutTypeAndCost cutArea, sectionArea, smallCutFee, largeCutFee, cutType, cutCost, feeCalculation
         
         outputArray(outputRow, 1) = dataArray(i, 1)  ' Street Name
@@ -186,28 +288,40 @@ Private Sub ProcessAndOutputData(wsOutput As Worksheet, wsPCI As Worksheet, inpu
         outputArray(outputRow, 10) = functionalClassFull
         outputArray(outputRow, 11) = cutType
         outputArray(outputRow, 12) = Round(cutArea, 2)
-        outputArray(outputRow, 13) = Round(smallCutFee, 2)
-        outputArray(outputRow, 14) = Round(largeCutFee, 2)
+        outputArray(outputRow, 13) = "$" & Format(smallCutFee, "#,##0.00")  ' Adjusted Small Cut Fee with $
+        outputArray(outputRow, 14) = "$" & Format(largeCutFee, "#,##0.00")  ' Adjusted Large Cut Fee with $
         outputArray(outputRow, 15) = feeCalculation
-        outputArray(outputRow, 16) = Round(cutCost, 2)
+        outputArray(outputRow, 16) = "$" & Format(cutCost, "#,##0.00")
+        outputArray(outputRow, 17) = "$" & Format(smallCutFee, "#,##0.00")  ' New column for Adjusted Small Cut Fee
+        outputArray(outputRow, 18) = "$" & Format(largeCutFee, "#,##0.00")  ' New column for Adjusted Large Cut Fee
         
         remainingCutLength = Round(remainingCutLength - sectionLength, 2)
         currentCutStart = Round(sectionEnd, 2)
         totalCutCost = Round(totalCutCost + cutCost, 2)
         
-        If remainingCutLength <= 0 Or dataArray(i, 3) = "END" Then Exit For
+        If remainingCutLength <= 0 Then Exit For
         
         outputRow = outputRow + 1
     Next i
     
-    wsOutput.Cells(2, 1).Resize(outputRow, 16).Value = outputArray
+    ' Handling case where cut length exceeds the available sections
+    If remainingCutLength > 0 Then
+        MsgBox "Warning: The cut length exceeds the available sections. Remaining cut length: " & remainingCutLength, vbExclamation, "Warning"
+    End If
+    
+    wsOutput.Cells(2, 1).Resize(outputRow, 18).Value = outputArray
     
     outputRow = outputRow + 2
     wsOutput.Cells(outputRow, 1).Value = "Total Cut Cost"
-    wsOutput.Cells(outputRow, 16).Value = totalCutCost
+    wsOutput.Cells(outputRow, 16).Value = "$" & Format(totalCutCost, "#,##0.00")
     
-    ThisWorkbook.Sheets("Sheet3").Cells(11, 3).Value = totalCutCost
+    ' Output the total cut cost to C11 on the "Cut Impact Fee Calculator" sheet
+    wsInput.Cells(11, 3).Value = totalCutCost
+    
+    FormatOutputSheet wsOutput, outputRow
 End Sub
+
+
 
 Private Sub DetermineFees(functionalClass As String, pci As Double, ByRef functionalClassFull As String, ByRef smallCutFee As Double, ByRef largeCutFee As Double)
     Select Case functionalClass
@@ -257,3 +371,5 @@ Private Sub DetermineCutTypeAndCost(cutArea As Double, sectionArea As Double, sm
         feeCalculation = cutArea & " * " & largeCutFee
     End If
 End Sub
+
+
